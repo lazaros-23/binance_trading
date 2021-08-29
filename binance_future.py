@@ -4,6 +4,11 @@ import requests
 import pprint
 import logging
 
+import hmac
+import hashlib
+
+from urllib.parse import urlencode
+
 logger = logging.getLogger() 
 
 class BinanceFuturesClient():
@@ -14,6 +19,11 @@ class BinanceFuturesClient():
             self.base_url = 'https://fapi.binance.com'
 
         logger.info("Binance futures client succussfully initialized")
+
+
+
+    def generate_signature(self,data):
+        return hmac.new(self.secret_key.encode(), urlencode(data).encode(), hashlib.sha256).hexdigest()
 
     def make_request(self, method, endpoint, data):
         if method == 'GET':
@@ -33,6 +43,7 @@ class BinanceFuturesClient():
             
             return None
 
+
     def get_contracts(self):
 
         exchange_info = self.make_request('GET', '/fapi/v1/exchangeInfo', None)
@@ -43,6 +54,7 @@ class BinanceFuturesClient():
                 contracts[contract_data['pair']] == contract_data
 
         return contracts
+
 
     def get_historical_candles(self, symbol, intreval):
         data = dict()
@@ -75,6 +87,24 @@ class BinanceFuturesClient():
         
         return self.prices[symbol]
 
+    def get_balances(self):
+
+        data = dict()
+        data['timestamp'] = int(time.time() * 1000)
+        data['signature'] = self.generate_signature(data)
+
+        balacnes = dict()
+
+        account_data = self.make_request('GET','/fapi/v1/account', data)
+
+        if account_data is not None:
+            for a in account_data['assets']:
+                balacnes[a['asset']] = a
+
+        return balacnes
+
+
+
     def place_order(self, symbol, side, quantity, order_type, price=None, tif=None):
         data = dict()
         data['symbol'] = symbol
@@ -96,7 +126,6 @@ class BinanceFuturesClient():
         return order_status
 
 
-
     def get_order_status(self, symbol, order_id):
 
         data = dict()
@@ -108,6 +137,8 @@ class BinanceFuturesClient():
         order_status = self.make_request('GET', '/fapi/v1/order' data)
 
         return order_status
+
+
     def cancel_order(self, symbol, order_id):
 
         data = dict()
